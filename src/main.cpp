@@ -1,9 +1,6 @@
 #include "ofMain.h"
 #include "testApp.h"
 #include "ofAppGlutWindow.h"
-//test
-
-//sasa
 //========================================================================
 int main( ){
 

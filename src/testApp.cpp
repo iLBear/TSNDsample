@@ -1,7 +1,7 @@
 #include "testApp.h"
 #include "inttypes.h"
 //test from MBA
-
+//test from MBP
 
 int testApp::open_port(){
     fd = open("/dev/tty.TSND121_BT", O_RDWR | O_NOCTTY | O_NDELAY);
