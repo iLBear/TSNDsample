@@ -1,4 +1,5 @@
 #include "testApp.h"
+#include "inttypes.h"
 
 int testApp::open_port(){
     fd = open("/dev/tty.TSND121_BT", O_RDWR | O_NOCTTY | O_NDELAY);
@@ -28,16 +29,31 @@ void testApp::setup(){
 //    printf("-127:%x\n", -127);
 //    printf("-128:%x\n", -128);
 //    printf("-255:%x\n", -255);
-//    long hh = 0xfffffeff;
-//    long gg;
+//    int32_t hh = 0xfffffeff;
+//    int gg;
+//	int32_t ff = -257;
 //    const char *str = "0xfffffeff";
 //    char *ch;
-//   printf("-257:%#x\n", -257);
-//   printf("hh:%ld\n", hh);
-//   gg = strtol(str, &ch, 16);  //なぜかunsigned longに変換されてしまう
-//   printf("lu:%lu\n", gg);
-//   printf("ld:%ld\n", gg);
-//   printf("%ld\n", ~gg);
+//	printf("-257:%#x\n", ff);
+//	printf("hh:%d\n", hh);
+//	gg = strtoimax(str, &ch, 16);
+//	printf("strtoimax:%d\n", gg);
+//	
+//	gg = strtol(str, &ch, 16);//上手く変換されない
+//   printf("strtol:%d\n", gg+1);
+	
+	
+//	printf("size:%ld\n", sizeof(gg));
+//	printf("\n   int:%ld\n", sizeof(int));
+//	printf(" int32:%ld\n", sizeof(int32_t));
+//	printf(" int64:%ld\n", sizeof(int64_t));
+//	printf("  long:%ld\n", sizeof(long));
+//	printf(" long2:%ld\n", sizeof(long long));
+//	printf("double:%ld\n", sizeof(double));
+//	printf("\n intMax:%d\n", INT_MAX);
+//	printf("longMax:%ld\n", LONG_MAX);
+//	printf("longlongMax:%lld\n", LONG_LONG_MAX);
+//   printf("%d\n", ~gg);
 //   printf("t:%d ", true);
 //    printf("f:%d\n", false);
     
@@ -66,6 +82,10 @@ void testApp::setup(){
     
     /* ポートの新しいオプションの設定 */
     tcsetattr(fd, TCSANOW, &options);
+	
+	/* 加速度設定を取得する為にメッセージを送信 */
+	sleep(2);	//コマンドが高確率で届くように，接続してから数秒待つ
+	TSND.command.getAccelMeasurement(fd);
     
 }
 
@@ -80,46 +100,64 @@ void testApp::update(){
 //        for(int i = 0; i < nbytes; i++){
 //            printf("%2d: %x\n", i, buffer[i]);
 //        }
-//        char str[10];
-//        char *ch;
+        char str[10];
+        char *ch;
         
         /* 以下メッセージの中身を解析 */
     if(nbytes > 0){
         switch(buffer[1]){
             case 0x80:  //加速度・角速度計測メッセージ
-                for(int i = 0; i < 2; i++){
-                    if(buffer[6+(3*i)] >= 0x80){
-                        buffer[6+(3*i)] ^= 0xff;    //0~255を128~0, 0~127に変換
-                    }
-                    if(buffer[7+(3*i)] >= 0x80){
-                        buffer[7+(3*i)] ^= 0xff;
-                    }
+//                for(int i = 0; i < 3; i++){
+//                    if(buffer[6+(3*i)] >= 0x80){
+//                        buffer[6+(3*i)] ^= 0xff;    //0~255を128~0, 0~127に変換
+//                    }
+//                    if(buffer[7+(3*i)] >= 0x80){
+//                        buffer[7+(3*i)] ^= 0xff;
+//                    }
+//                    if(buffer[8+(3*i)] >= 0xF0){    //最上位4ビットが1ならマイナス（にした）
+//						TSND.accel[i] = -(256*buffer[7+(3*i)]+buffer[6+(3*i)]);
+//                    }else{
+//						TSND.accel[i] = (256*buffer[7+(3*i)]+buffer[6+(3*i)]);
+//                    }
+//					TSND.rotate[i] = TSND.accel[i]*0.009;	//-10k~10kの値を取るらしいので,0.009を掛けることにより-90~90[deg]に変換した
+//                }
+	
+				for(int i = 0; i < 3; i++){
                     if(buffer[8+(3*i)] >= 0xF0){    //最上位4ビットが1ならマイナス（にした）
-                        rotate[i] = -(256*buffer[7+(3*i)]+buffer[6+(3*i)])*0.009;   //-10k~10kの値を取るらしいので,0.009を掛けることにより-90~90[deg]に変換した
+						sprintf(str, "0xff%02x%02x%02x", buffer[8+(3*i)], buffer[7+(3*i)], buffer[6+(3*i)]);
                     }else{
-                        rotate[i] = (256*buffer[7+(3*i)]+buffer[6+(3*i)])*0.009;
+						sprintf(str, "0x00%02x%02x%02x", buffer[8+(3*i)], buffer[7+(3*i)], buffer[6+(3*i)]);
                     }
+					TSND.accel[i] = strtoimax(str, &ch, 16);
+					TSND.rotate[i] = TSND.accel[i]*0.009;	//-10k~10kの値を取るらしいので,0.009を掛けることにより-90~90[deg]に変換した
                 }
 
-//                printf("X:0x%02x%02x%02x\n", buffer[8], buffer[7], buffer[6]);
-//                sprintf(str, "0x%02x%02x%02x", buffer[8], buffer[7], buffer[6]);
-//                printf("%s\n", str);
-//                printf("%ld\n", strtol(str, &ch, 16));　//なぜかunsigned longに変換されてしまう
-                printf("x:%3d, y:%3d\n", rotate[0], rotate[1]);
+				
+				//z軸方向の移動距離
+				TSND.calcDistFromAccel('z');
+				
+//              printf("X:0x%02x%02x%02x\n", buffer[8], buffer[7], buffer[6]);
+//				printf("Y:0x%02x%02x%02x\n", buffer[11], buffer[10], buffer[9]);
+//				printf("Z:0x%02x%02x%02x\n", buffer[14], buffer[13], buffer[12]);
+//              sprintf(str, "0x%02x%02x%02x", buffer[8], buffer[7], buffer[6]);
+                printf("[acc]x:%3d, y:%3d, z;%3d\n", TSND.accel[0], TSND.accel[1], TSND.accel[2]);
+//				printf("[rot]x:%3f, y:%3f, z;%3f\n", TSND.rotate[0], TSND.rotate[1], TSND.rotate[2]);
+//				printf("            dist_z:%.3f, v0:%.3f\n", TSND.distance[2], TSND.velocity[2]);
+				TSND.height_delta += TSND.distance[2];
                 break;
                 
             case 0x82:  //気圧計速メッセージ
-                if(initializeP){
-                    initPressure = 256*256*buffer[8]+256*buffer[7]+buffer[6];
-                    initializeP = false;
+                if(TSND.initializeP){
+                    TSND.initPressure = 256*256*buffer[8]+256*buffer[7]+buffer[6];
+                    TSND.initializeP = false;
                 }
                 printf("Msg[0x%02x%02x%02x]\n", buffer[8], buffer[7], buffer[6]);
-                pressure = 256*256*buffer[8]+256*buffer[7]+buffer[6];
+                TSND.pressure = 256*256*buffer[8]+256*buffer[7]+buffer[6];
                 
-                height = 44330.77*(1.0-pow((pressure/101325.0), 0.1902632)); //海抜からの高度算出
+                TSND.height = 44330.77*(1.0-pow((TSND.pressure/101325.0), 0.1902632)); //海抜からの高度算出
                 
-                printf(" Pressure:%d[Pa] delta:%d\n", pressure, initPressure-pressure);
-                printf(" Height:%.3f[m]\n", height);
+                printf(" Pressure:%d[Pa] delta:%d\n", TSND.pressure, TSND.initPressure-TSND.pressure);
+                printf(" Height:%.3f[m]\n", TSND.height);
                 break;
             
             case 0x85:  //エッジ検出（オプションボタン押下など）
@@ -158,7 +196,6 @@ void testApp::update(){
                 break;
                 
             case 0x89:  //計測終了通知
-                isReadMsg = false;
                 isMeasuring = false;
                 printf("Stop measuring.\n");
                 break;
@@ -169,18 +206,22 @@ void testApp::update(){
                 }else{  //0x01
                     printf(" -> NG\n");
                 }
-                isReadMsg = false;
                 break;
                 
             case 0x92:  //現在時刻メッセージ
                 printf("<%4d/%02d/%02d %02d:%02d:%02d>\n", buffer[2]+2000, buffer[3], buffer[4], buffer[5], buffer[6], buffer[7]);
-                isReadMsg = false;
                 break;
                 
             case 0x93:  //計測時刻応答
 //                printf("stop measuring\n");
                 break;
                 
+			case 0x97:
+				TSND.setAccelCycle(buffer[2]);
+				TSND.setAccelAverage(buffer[3]);
+				printf("=== set accel Cy:%d, Av:%d\n", buffer[2], buffer[3]);
+				break;
+				
             case 0xbb:  //計測時刻応答
                 printf("Battery %d%%\n", buffer[4]);
                 break;
@@ -201,15 +242,12 @@ void testApp::draw(){
     }else{
         ofDrawBitmapString("isMeasuring:false", 0,15);
     }
-    if(isReadMsg){
-        ofDrawBitmapString("isReadMsg:true", 0,30);
-    }else{
-        ofDrawBitmapString("isReadMsg:false", 0,30);
-    }
+	
+	ofDrawBitmapString("Height_delta"+ofToString(TSND.height_delta, 3)+"[cm]", 20,60);
     
     ofPushMatrix();
     ofTranslate(ofGetWidth()/2, ofGetHeight()/2);
-    ofRotateZ(rotate[0]);
+    ofRotateZ(TSND.rotate[0]);
     ofSetColor(255);
     ofLine(-ofGetWidth()/2, 0, ofGetWidth()/2, 0);
     ofPopMatrix();
@@ -217,7 +255,7 @@ void testApp::draw(){
 
 //--------------------------------------------------------------
 void testApp::exit(){
-    TSNDcmd.stopMeasure(fd);
+    TSND.command.stopMeasure(fd);
     printf("\nEXIT.\n");
     close(fd);
 }
@@ -231,17 +269,18 @@ void testApp::keyPressed(int key){
     
     switch(key){
         case 't':   //現在時刻取得
-            TSNDcmd.getTime(fd);
+            TSND.command.getTime(fd);
             break;
             
         case OF_KEY_RETURN:
             if(isMeasuring){    //計測停止
                 isMeasuring = false;
-                TSNDcmd.stopMeasure(fd);
+                TSND.command.stopMeasure(fd);
             }else{              //計測開始
-                initializeP = true;
+                TSND.initializeP = true;
                 isMeasuring = true;
-                TSNDcmd.startMeasure(fd, 10);
+				TSND.height_delta = 0;
+                TSND.command.startMeasure(fd, 10);
             }
             break;
             
@@ -249,40 +288,78 @@ void testApp::keyPressed(int key){
             break;
             
         case 'o':
-            TSNDcmd.setOptionButtonMode(fd, 3);
+            TSND.command.setOptionButtonMode(fd, 3);
             break;
             
         case 'b':
-            TSNDcmd.getBatteryRemain(fd);
+            TSND.command.getBatteryRemain(fd);
             break;
             
         case 'B':
-            TSNDcmd.setBatteryMeasurement(fd, false, false);
+            TSND.command.setBatteryMeasurement(fd, false, false);
             break;
             
         case 'a':   //加速度計測設定ON
-            TSNDcmd.setAccelMeasurement(fd, 5, 10, 0);
+            TSND.command.setAccelMeasurement(fd, 5, 10, 0);
+			TSND.command.getAccelMeasurement(fd);
             break;
         case 'A':   //加速度計測設定OFF
-            TSNDcmd.setAccelMeasurement(fd, 0, 10, 0);
+            TSND.command.setAccelMeasurement(fd, 0, 10, 0);
             break;
             
         case 'g':   //地磁気計測設定ON
-            TSNDcmd.setGeometricMeasurement(fd, 10, 10, 0);
+            TSND.command.setGeometricMeasurement(fd, 10, 10, 0);
             break;
         case 'G':   //地磁気計測設定OFF
-            TSNDcmd.setGeometricMeasurement(fd, 0, 10, 0);
+            TSND.command.setGeometricMeasurement(fd, 0, 10, 0);
             break;
             
         case 'p':   //気圧計測設定ON
-            initializeP = true;
-            TSNDcmd.setPressureMeasurement(fd, 4, 5, 0);
+            TSND.initializeP = true;
+            TSND.command.setPressureMeasurement(fd, 4, 5, 0);
             break;
         case 'P':   //気圧計測設定OFF
-            initializeP = false;
-            TSNDcmd.setPressureMeasurement(fd, 0, 5, 0);
+            TSND.initializeP = false;
+            TSND.command.setPressureMeasurement(fd, 0, 5, 0);
             break;
-            
+			
+		case 'r':
+			TSND.command.setAccelRange(fd, 0);
+			break;
+			
+		case 'c':
+			TSND.command.collectAccelMeasurement(fd, 1, 1, 1, 0, 0, 0);
+			break;
+			
+		case 'z':
+			TSND.command.setBuzzerVolume(fd, 0);
+			break;
+			
+		case '1':
+			TSND.command.playBuzzer(fd, 1);
+			break;
+		case '2':
+			TSND.command.playBuzzer(fd, 2);
+			break;
+		case '3':
+			TSND.command.playBuzzer(fd, 3);
+			break;
+		case '4':
+			TSND.command.playBuzzer(fd, 4);
+			break;
+		case '5':
+			TSND.command.playBuzzer(fd, 5);
+			break;
+		case '6':
+			TSND.command.playBuzzer(fd, 6);
+			break;
+		case '7':
+			TSND.command.playBuzzer(fd, 7);
+			break;
+		case '0':
+			TSND.command.playBuzzer(fd, 0);
+			break;
+			
         default:
 //            isReadMsg = false;
             break;

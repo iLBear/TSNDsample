@@ -1,8 +1,7 @@
 #pragma once
 
 #include "ofMain.h"
-#include "TSNDcommand.h"
-
+#include "TSND121.h"
 
 class testApp : public ofBaseApp{
     
@@ -26,23 +25,16 @@ public:
     
     int fd; //ポートのファイルディスクリプタ
     
-    bool isReadMsg = false;
-    bool isMeasuring = false;
-    
+    bool isMeasuring = false;	//計測中かどうか
     struct termios options;
     
-    TSNDcommand TSNDcmd;
+	TSND121 TSND;
     
     Byte buffer[64];
     Byte *bufptr;
     int nbytes;
-
-    int rotate[3];  //加速度
-    int pressure;   //気圧
     
-    bool initializeP = false;
-    int initPressure;
-    float height;
+//    bool initializeP = false;
     
     string messageStr;
 };
